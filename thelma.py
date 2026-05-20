@@ -345,13 +345,21 @@ class ThelmaWindow:
 
         if ev == "reset":
             self._reset_escape()
-        else:
-            # Any other trigger from the other device reveals the preset patient data
+        elif ev == "success":
             if not state.patient_info_ready:
                 state.patient_info_ready = True
                 state.notify()
                 if self.current_screen == "home":
                     self._show_home()
+        elif ev == "load_roll":
+            if not state.roll_loaded:
+                self.load_roll()
+        elif ev == "press_button":
+            self.simulate_press_button()
+        elif ev == "take_sachet":
+            self.simulate_take_sachet()
+        elif ev in ("dispense_green", "dispense_yellow", "dispense_red"):
+            self.trigger_dispense(ev.split("_", 1)[1])
 
     # ── ESCAPE START screen ────────────────────────────────────────────────────
 
@@ -1181,9 +1189,7 @@ class AdminWindow:
 def main():
     _start_server()
     root = tk.Tk()
-    thelma = ThelmaWindow(root)
-    admin_root = tk.Toplevel(root)
-    AdminWindow(admin_root, thelma)
+    ThelmaWindow(root)
     root.mainloop()
 
 
