@@ -32,8 +32,8 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 _DIR = os.path.dirname(os.path.abspath(__file__))
 
 CONFIG = {
-    "other_ip":          "192.168.1.100",
-    "other_port":        5000,
+    "other_ip":          "172.16.0.2",
+    "other_port":        3000,
     "listen_port":       5000,
     "countdown_seconds": 900,
     "auto_dispense_at_zero": True,
@@ -53,8 +53,23 @@ _http_server = None
 
 class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        n = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(n)
+        cl = self.headers.get("Content-Length")
+        te = self.headers.get("Transfer-Encoding", "")
+        if cl is not None:
+            body = self.rfile.read(int(cl))
+        elif "chunked" in te.lower():
+            body = b""
+            while True:
+                line = self.rfile.readline().strip()
+                if not line:
+                    break
+                size = int(line, 16)
+                if size == 0:
+                    break
+                body += self.rfile.read(size)
+                self.rfile.read(2)  # consume trailing \r\n
+        else:
+            body = b""
         try:
             _event_q.put(json.loads(body))
         except Exception:
@@ -131,10 +146,16 @@ DEVICE_BG  = "#2A2A2A"
 class AppState:
     def __init__(self):
         self.roll_loaded         = False
-        self.patient_name        = ""          # empty until triggered
-        self.patient_info_ready  = False
+        self.patient_info_ready  = False       # hidden until other device triggers
         self.signal              = 4
-        self.schedule            = []          # populated by network trigger
+
+        # ── Preset patiëntgegevens ─────────────────────────────────────────────
+        self.patient_name = "Rayan Echebechi"
+        self.schedule = [
+            {"time": "14:30", "taken": False,
+             "medicines": ["Paracetamol 1000mg", "Pantoprazol 40mg",
+                           "Simvastatine 20mg"]},
+        ]
         self.dispense_state      = "idle"      # idle | green | yellow | red | ready
         self.dispense_index      = None
 
@@ -320,25 +341,17 @@ class ThelmaWindow:
         self.root.after(100, self._poll_events)
 
     def _handle_network_event(self, data: dict):
-        ev = data.get("event", "patient_info")
+        ev = data.get("event", "")
 
-        if ev == "patient_info" or "patient_name" in data:
-            name = data.get("patient_name", state.patient_name)
-            sched = data.get("schedule", [])
-            # Ensure each slot has a "taken" field
-            for slot in sched:
-                slot.setdefault("taken", False)
-            state.patient_name = name
-            if sched:
-                state.schedule = sched
-            state.patient_info_ready = True
-            state.notify()
-            # Refresh screen if we're on home/countdown
-            if self.current_screen == "home":
-                self._refresh_home()
-
-        elif ev == "reset":
+        if ev == "reset":
             self._reset_escape()
+        else:
+            # Any other trigger from the other device reveals the preset patient data
+            if not state.patient_info_ready:
+                state.patient_info_ready = True
+                state.notify()
+                if self.current_screen == "home":
+                    self._show_home()
 
     # ── ESCAPE START screen ────────────────────────────────────────────────────
 
@@ -365,20 +378,31 @@ class ThelmaWindow:
         pill_btn(btn_f, "▶   START", GREEN, "white",
                  self.f_start, self._start_escape, width=280, height=66).pack()
 
-        # TSC logo at bottom
-        logo = tk.Frame(f, bg=BG)
-        logo.pack(side="bottom", pady=40)
+        # Bottom branding block
+        bottom_f = tk.Frame(f, bg=BG)
+        bottom_f.pack(side="bottom", pady=(0, 22))
+
+        # TSC logo
+        logo = tk.Frame(bottom_f, bg=BG)
+        logo.pack()
         tk.Label(logo, text=" TSC ", font=self.f_small_b,
                  bg=ORANGE, fg="white", padx=6, pady=5).pack(side="left")
         tk.Label(logo, text="  Connected\n  Care",
                  font=self.f_small, bg=BG, fg=DARK_TEXT, justify="left").pack(side="left", padx=6)
 
+        # Separator
+        tk.Frame(bottom_f, bg=BORDER, height=1).pack(fill="x", pady=(10, 6))
+
+        # Sponsor
+        tk.Label(bottom_f, text="Mede mogelijk gemaakt door",
+                 font=self.f_tiny, bg=BG, fg=GREY_TEXT).pack()
+        tk.Label(bottom_f, text="✚  Apotheek Pijnacker Centrum",
+                 font=self.f_small_b, bg=BG, fg="#2E7D32").pack(pady=(2, 0))
+
     def _start_escape(self):
         state.escape_active       = True
         state.countdown_remaining = state.countdown_total
-        state.patient_info_ready  = False
-        state.patient_name        = ""
-        state.schedule            = []
+        state.patient_info_ready  = False   # hidden until other device triggers
         state.roll_loaded         = False
         state.dispense_state      = "idle"
         state.dispense_index      = None
@@ -844,9 +868,7 @@ class ThelmaWindow:
         state.escape_active       = False
         state.escape_complete     = False
         state.countdown_remaining = state.countdown_total
-        state.patient_info_ready  = False
-        state.patient_name        = ""
-        state.schedule            = []
+        state.patient_info_ready  = False   # hidden again on reset
         state.roll_loaded         = False
         state.dispense_state      = "idle"
         state.dispense_index      = None
@@ -907,13 +929,9 @@ class ThelmaWindow:
         if state.dispense_state == "ready":
             self._confirm_taken()
 
-    def inject_patient_info(self, name, schedule):
+    def reveal_patient_info(self):
         """Called from admin panel to simulate the other device trigger."""
-        _event_q.put({
-            "event": "patient_info",
-            "patient_name": name,
-            "schedule": schedule,
-        })
+        _event_q.put({"event": "success"})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -966,19 +984,19 @@ class AdminWindow:
         tk.Label(nrow, text=f"→ {CONFIG['other_ip']}:{CONFIG['other_port']}",
                  font=self.f_label, bg="#1C1C2E", fg="#7A8ACC").pack(side="right")
 
-        # ── Trigger patiëntinfo ────────────────────────────────────────────────
+        # ── Trigger van andere device ──────────────────────────────────────────
         pf = tk.LabelFrame(r, text=" Simuleer: Andere Device → Thelma ",
                            font=self.f_label, bg="#1C1C2E", fg="#AAAACC",
                            bd=1, relief="groove")
         pf.pack(fill="x", padx=14, pady=6)
         prow = tk.Frame(pf, bg="#1C1C2E")
         prow.pack(fill="x", padx=12, pady=8)
-        tk.Label(prow, text="Stuur patiëntinfo:",
+        tk.Label(prow, text="Andere device meldt 'gelukt':",
                  font=self.f_label, bg="#1C1C2E", fg="white").pack(side="left")
-        tk.Button(prow, text="📋  Stuur patiëntinfo",
-                  font=self.f_label_b, bg="#4A5B8C", fg="white",
+        tk.Button(prow, text="✅  Stuur trigger",
+                  font=self.f_label_b, bg="#4A7C59", fg="white",
                   relief="flat", padx=10, pady=6, bd=0,
-                  command=self._send_patient_info).pack(side="right")
+                  command=self._send_reveal_trigger).pack(side="right")
 
         # ── Status lights ──────────────────────────────────────────────────────
         lf = tk.LabelFrame(r, text=" Status Lampjes ", font=self.f_label,
@@ -1123,20 +1141,10 @@ class AdminWindow:
             text=state.patient_name if state.patient_info_ready else "niet ontvangen",
             fg=GREEN if state.patient_info_ready else "#AAAACC")
 
-    def _send_patient_info(self):
-        """Simulate the other device sending patient info to Thelma."""
-        demo = {
-            "event": "patient_info",
-            "patient_name": "Truus van Roeden",
-            "schedule": [
-                {"time": "10:00", "taken": False,
-                 "medicines": ["Paracetamol 1000mg", "Pantoprazol 40mg"]},
-                {"time": "14:15", "taken": False,
-                 "medicines": ["Simvastatine 20mg"]},
-            ],
-        }
-        _event_q.put(demo)
-        self._log("📋 Patiëntinfo verstuurd naar Thelma.")
+    def _send_reveal_trigger(self):
+        """Simulate the other device sending its success signal to Thelma."""
+        _event_q.put({"event": "success"})
+        self._log("✅ Trigger ontvangen van andere device — patiëntgegevens zichtbaar.")
 
     def _load_roll(self):
         if state.roll_loaded:

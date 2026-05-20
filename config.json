@@ -1,7 +1,7 @@
 {
-  "other_ip": "192.168.1.100",
-  "other_port": 5000,
-  "listen_port": 5000,
+  "other_ip":          "127.0.0.1",
+  "other_port":        3001,
+  "listen_port":       5001,
   "countdown_seconds": 300,
   "auto_dispense_at_zero": true
 }

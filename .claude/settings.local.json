@@ -22,7 +22,11 @@
       "Bash(pkill -f thelma.py)",
       "Bash(/opt/homebrew/bin/python3 thelma.py)",
       "Read(//Users/jesse/Desktop/**)",
-      "Bash(xargs ls -lt)"
+      "Bash(xargs ls -lt)",
+      "Bash(find /Users/jesse/Tessa -type f | head -50)",
+      "Read(//Users/jesse/Tessa/**)",
+      "Bash(find /Users/jesse -maxdepth 4 \\\\\\( -iname \"*pijnacker*\" -o -iname \"*apotheek*\" \\\\\\) 2>/dev/null)",
+      "Read(//Users/jesse/**)"
     ]
   }
 }
