@@ -88,15 +88,19 @@ class _Handler(BaseHTTPRequestHandler):
         pass
 
 
+class _ReuseServer(HTTPServer):
+    allow_reuse_address = True
+
+
 def _start_server():
     global _http_server
+    port = CONFIG["listen_port"]
     try:
-        _http_server = HTTPServer(("0.0.0.0", CONFIG["listen_port"]), _Handler)
-        _http_server.allow_reuse_address = True
+        _http_server = _ReuseServer(("0.0.0.0", port), _Handler)
         threading.Thread(target=_http_server.serve_forever, daemon=True).start()
-    except OSError:
-        # Port already in use — another instance is likely running; ignore
-        pass
+        print(f"[HTTP] Luistert op 0.0.0.0:{port}")
+    except OSError as e:
+        print(f"[HTTP] Kon poort {port} niet openen: {e}")
     except Exception as e:
         print(f"[HTTP] {e}")
 
