@@ -1,4 +1,4 @@
-#!/opt/homebrew/bin/python3
+#!/usr/bin/env python3
 """
 Thelma Medicijndispenser Simulator – Escape Room Edition
 
@@ -79,10 +79,18 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(b"OK")
 
     def do_GET(self):
-        # Browser-friendly test endpoint: GET /trigger?json={"event":"patient_info",...}
         self.send_response(200)
+        self.send_header("Content-Type", "application/json")
         self.end_headers()
-        self.wfile.write(b"Thelma Escape Room OK")
+        import json as _json
+        self.wfile.write(_json.dumps({
+            "status": "ok",
+            "screen": "thelma",
+            "escape_active": state.escape_active,
+            "roll_loaded": state.roll_loaded,
+            "patient_info_ready": state.patient_info_ready,
+            "countdown": state.countdown_remaining,
+        }).encode())
 
     def log_message(self, *_):
         pass
@@ -1192,9 +1200,13 @@ class AdminWindow:
 
 def main():
     _start_server()
-    root = tk.Tk()
-    ThelmaWindow(root)
-    root.mainloop()
+    try:
+        root = tk.Tk()
+        ThelmaWindow(root)
+        root.mainloop()
+    except Exception as e:
+        print(f"[CRASH] {e}")
+        import traceback; traceback.print_exc()
 
 
 if __name__ == "__main__":
