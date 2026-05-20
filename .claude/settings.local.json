@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:www.technologievoorwarmezorg.nl)",
+      "Bash(pdftotext \"/Users/jesse/.claude/projects/-Users-jesse-O-en-O-pillendispenser/e7505275-ab76-4beb-9fdf-a5bd7031b2df/tool-results/webfetch-1778671409024-0387q6.pdf\" -)",
+      "Bash(python3 -c \"import pypdf; print\\('pypdf ok'\\)\")",
+      "Bash(python3 -c \"import PyPDF2; print\\('PyPDF2 ok'\\)\")",
+      "Bash(python3 -c \"import pdfminer; print\\('pdfminer ok'\\)\")",
+      "Bash(pip3 install *)",
+      "Bash(python3)",
+      "Bash(ls /tmp/thelma_pages/ | head -30 && echo \"---\" && ls /tmp/thelma_pages/*.png 2>/dev/null | wc -l)",
+      "Read(//private/tmp/thelma_pages/**)",
+      "Bash(python3 -c \"import thelma; print\\('import ok'\\)\")",
+      "Bash(python3 -c \"import thelma; print\\('ok'\\)\")",
+      "Bash(python3 thelma.py)",
+      "Bash(/opt/homebrew/bin/python3 --version)",
+      "Bash(brew list *)",
+      "Bash(brew install *)",
+      "Bash(/opt/homebrew/bin/python3.14 -c \"import tkinter; print\\('tkinter ok'\\)\")",
+      "Bash(/opt/homebrew/bin/python3 -c \"import tkinter; print\\('tkinter ok'\\)\")",
+      "Bash(/opt/homebrew/bin/python3 -c \"import thelma; print\\('ok'\\)\")",
+      "Bash(pkill -f thelma.py)",
+      "Bash(/opt/homebrew/bin/python3 thelma.py)",
+      "Read(//Users/jesse/Desktop/**)",
+      "Bash(xargs ls -lt)"
+    ]
+  }
+}
