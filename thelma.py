@@ -26,9 +26,13 @@ import time
 import queue
 import json
 import os
+import sys
 import socket
 import urllib.request
 from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# --kiosk  →  volledig scherm, geen rand, muiscursor verborgen (voor op de RPi)
+KIOSK = "--kiosk" in sys.argv or "-k" in sys.argv
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -287,41 +291,57 @@ def pill_icon(parent, size=48, row_bg=LIGHT_GREY):
 # ══════════════════════════════════════════════════════════════════════════════
 
 class ThelmaWindow:
-    W  = 430
-    H  = 870
-    BW = 20    # bezel width
-    CR = 26    # corner radius
-
     def __init__(self, root):
         self.root = root
         root.title("Thelma")
-        root.configure(bg=DEVICE_BG)
-        root.attributes("-fullscreen", True)
-        root.attributes("-topmost", True)
-        root.config(cursor="none")   # verberg muiscursor op touchscreen
+
+        if KIOSK:
+            root.configure(bg=BG)
+            root.attributes("-fullscreen", True)
+            root.attributes("-topmost", True)
+            root.config(cursor="none")
+            root.update_idletasks()
+            self.W  = root.winfo_screenwidth()
+            self.H  = root.winfo_screenheight()
+            self.BW = 0
+            self.CR = 0
+        else:
+            root.geometry("430x870+80+40")
+            root.resizable(False, False)
+            root.configure(bg=DEVICE_BG)
+            self.W  = 430
+            self.H  = 870
+            self.BW = 20
+            self.CR = 26
 
         self.IW = self.W - 2 * self.BW
         self.IH = self.H - 2 * self.BW
 
-        # Fonts
-        self.f_time   = tkfont.Font(family="Helvetica", size=58, weight="bold")
-        self.f_h2     = tkfont.Font(family="Helvetica", size=28, weight="bold")
-        self.f_h3     = tkfont.Font(family="Helvetica", size=20, weight="bold")
-        self.f_body   = tkfont.Font(family="Helvetica", size=16)
-        self.f_body_b = tkfont.Font(family="Helvetica", size=16, weight="bold")
-        self.f_small  = tkfont.Font(family="Helvetica", size=13)
-        self.f_small_b= tkfont.Font(family="Helvetica", size=13, weight="bold")
-        self.f_tiny   = tkfont.Font(family="Helvetica", size=11)
-        self.f_btn    = tkfont.Font(family="Helvetica", size=15, weight="bold")
-        self.f_logo   = tkfont.Font(family="Helvetica", size=17, weight="bold")
-        self.f_start  = tkfont.Font(family="Helvetica", size=22, weight="bold")
+        # Fonts  (schaal mee met schermbreedte t.o.v. ontwerpbreedte 430px)
+        s = max(0.7, self.W / 430)
+        def fs(n): return max(8, int(n * s))
+        self.f_time   = tkfont.Font(family="Helvetica", size=fs(58), weight="bold")
+        self.f_h2     = tkfont.Font(family="Helvetica", size=fs(28), weight="bold")
+        self.f_h3     = tkfont.Font(family="Helvetica", size=fs(20), weight="bold")
+        self.f_body   = tkfont.Font(family="Helvetica", size=fs(16))
+        self.f_body_b = tkfont.Font(family="Helvetica", size=fs(16), weight="bold")
+        self.f_small  = tkfont.Font(family="Helvetica", size=fs(13))
+        self.f_small_b= tkfont.Font(family="Helvetica", size=fs(13), weight="bold")
+        self.f_tiny   = tkfont.Font(family="Helvetica", size=fs(11))
+        self.f_btn    = tkfont.Font(family="Helvetica", size=fs(15), weight="bold")
+        self.f_logo   = tkfont.Font(family="Helvetica", size=fs(17), weight="bold")
+        self.f_start  = tkfont.Font(family="Helvetica", size=fs(22), weight="bold")
 
-        # Canvas: dark device body + white rounded screen
+        # Canvas
+        canvas_bg = BG if KIOSK else DEVICE_BG
         self.cv = tk.Canvas(root, width=self.W, height=self.H,
-                            bg=DEVICE_BG, highlightthickness=0)
+                            bg=canvas_bg, highlightthickness=0)
         self.cv.pack()
-        draw_rrect(self.cv, self.BW, self.BW,
-                   self.W - self.BW, self.H - self.BW, self.CR, BG)
+        if KIOSK:
+            self.cv.create_rectangle(0, 0, self.W, self.H, fill=BG, outline=BG)
+        else:
+            draw_rrect(self.cv, self.BW, self.BW,
+                       self.W - self.BW, self.H - self.BW, self.CR, BG)
 
         self.frame = tk.Frame(self.cv, bg=BG, width=self.IW, height=self.IH)
         self.cv.create_window(self.BW, self.BW, anchor="nw", window=self.frame)

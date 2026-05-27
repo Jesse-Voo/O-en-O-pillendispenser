@@ -1,0 +1,4 @@
+#!/bin/bash
+# Thelma starten in kiosk-modus (fullscreen, geen rand)
+cd /home/leerling/O-O-pillendispenser
+python3 thelma.py --kiosk
