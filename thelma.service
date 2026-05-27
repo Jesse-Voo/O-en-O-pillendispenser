@@ -1,0 +1,17 @@
+[Unit]
+Description=Thelma Escape Room
+After=graphical.target
+Wants=graphical.target
+
+[Service]
+Type=simple
+User=leerling
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/leerling/.Xauthority
+WorkingDirectory=/home/leerling/O-O-pillendispenser
+ExecStart=/usr/bin/python3 thelma.py --kiosk
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical.target
