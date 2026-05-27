@@ -21,6 +21,8 @@ import tkinter as tk
 from tkinter import font as tkfont
 from datetime import datetime
 import threading
+import traceback
+import time
 import queue
 import json
 import os
@@ -53,30 +55,36 @@ _http_server = None
 
 class _Handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        cl = self.headers.get("Content-Length")
-        te = self.headers.get("Transfer-Encoding", "")
-        if cl is not None:
-            body = self.rfile.read(int(cl))
-        elif "chunked" in te.lower():
-            body = b""
-            while True:
-                line = self.rfile.readline().strip()
-                if not line:
-                    break
-                size = int(line, 16)
-                if size == 0:
-                    break
-                body += self.rfile.read(size)
-                self.rfile.read(2)  # consume trailing \r\n
-        else:
-            body = b""
         try:
-            _event_q.put(json.loads(body))
-        except Exception:
-            pass
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"OK")
+            cl = self.headers.get("Content-Length")
+            te = self.headers.get("Transfer-Encoding", "")
+            if cl is not None:
+                body = self.rfile.read(int(cl))
+            elif "chunked" in te.lower():
+                body = b""
+                while True:
+                    line = self.rfile.readline().strip()
+                    if not line:
+                        break
+                    size = int(line, 16)
+                    if size == 0:
+                        break
+                    body += self.rfile.read(size)
+                    self.rfile.read(2)
+            else:
+                body = b""
+            try:
+                data = json.loads(body)
+                print(f"[HTTP] ontvangen: {data}")
+                _event_q.put(data)
+            except Exception:
+                print(f"[HTTP] kon body niet parsen: {body!r}")
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+        except Exception as e:
+            print(f"[HTTP POST] fout: {e}")
+            traceback.print_exc()
 
     def do_GET(self):
         self.send_response(200)
@@ -105,7 +113,9 @@ def _start_server():
     port = CONFIG["listen_port"]
     try:
         _http_server = _ReuseServer(("0.0.0.0", port), _Handler)
-        threading.Thread(target=_http_server.serve_forever, daemon=True).start()
+        t = threading.Thread(target=_http_server.serve_forever)
+        t.daemon = False  # blijft draaien ook als tkinter crasht
+        t.start()
         print(f"[HTTP] Luistert op 0.0.0.0:{port}")
     except OSError as e:
         print(f"[HTTP] Kon poort {port} niet openen: {e}")
@@ -285,9 +295,10 @@ class ThelmaWindow:
     def __init__(self, root):
         self.root = root
         root.title("Thelma")
-        root.geometry(f"{self.W}x{self.H}+80+40")
-        root.resizable(False, False)
         root.configure(bg=DEVICE_BG)
+        root.attributes("-fullscreen", True)
+        root.attributes("-topmost", True)
+        root.config(cursor="none")   # verberg muiscursor op touchscreen
 
         self.IW = self.W - 2 * self.BW
         self.IH = self.H - 2 * self.BW
@@ -347,7 +358,11 @@ class ThelmaWindow:
         try:
             while True:
                 event = _event_q.get_nowait()
-                self._handle_network_event(event)
+                try:
+                    self._handle_network_event(event)
+                except Exception as e:
+                    print(f"[EVENT] fout bij verwerken {event}: {e}")
+                    traceback.print_exc()
         except queue.Empty:
             pass
         self.root.after(100, self._poll_events)
@@ -1200,13 +1215,19 @@ class AdminWindow:
 
 def main():
     _start_server()
-    try:
-        root = tk.Tk()
-        ThelmaWindow(root)
-        root.mainloop()
-    except Exception as e:
-        print(f"[CRASH] {e}")
-        import traceback; traceback.print_exc()
+    while True:
+        try:
+            root = tk.Tk()
+            ThelmaWindow(root)
+            root.mainloop()
+            break  # normaal afgesloten via venster-sluitknop
+        except Exception as e:
+            print(f"[CRASH] tkinter: {e}")
+            traceback.print_exc()
+            print("[INFO] Herstarten over 3 seconden...")
+            time.sleep(3)
+    if _http_server:
+        _http_server.shutdown()
 
 
 if __name__ == "__main__":
